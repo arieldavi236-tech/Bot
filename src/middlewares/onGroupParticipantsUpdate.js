@@ -9,6 +9,7 @@ import {
   isActiveExitGroup,
   isActiveGroup,
   isActiveWelcomeGroup,
+  isBlacklistMember,
 } from "../utils/database.js";
 import { extractUserLid, onlyNumbers } from "../utils/index.js";
 import { errorLog } from "../utils/logger.js";
@@ -29,6 +30,27 @@ export async function onGroupParticipantsUpdate({
     }
 
     const userLid = extractUserLid(data);
+
+    // 🚫 LISTA NEGRA
+    // Se um membro da lista negra entrar novamente,
+    // o bot remove automaticamente.
+    if (
+      action === "add" &&
+      userLid &&
+      isBlacklistMember(remoteJid, userLid)
+    ) {
+      await socket.groupParticipantsUpdate(
+        remoteJid,
+        [userLid],
+        "remove"
+      );
+
+      await socket.sendMessage(remoteJid, {
+        text: "🚫 Um membro da Lista Negra tentou entrar e foi removido automaticamente.",
+      });
+
+      return;
+    }
 
     if (isActiveWelcomeGroup(remoteJid) && action === "add") {
       const hasMemberMention = welcomeMessage.includes("@member");

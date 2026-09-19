@@ -1,0 +1,33 @@
+{
+  "39875231404063@lid": {
+    "pontos": 3,
+    "vitorias": 3
+  },
+  "_quiz": {
+    "39875231404063@lid": {
+      "pergunta": "Qual é o maior oceano da Terra?",
+      "resposta": "pacifico"
+    }
+  },
+  "_forca": {
+    "39875231404063@lid": {
+      "palavra": "shizuka",
+      "letras": [
+        "a"
+      ],
+      "erros": 0
+    }
+  },
+  "_adivinhe": {
+    "39875231404063@lid": {
+      "dica": "Tenho teclas, mas não abro portas. O que sou?",
+      "resposta": "teclado"
+    }
+  },
+  "_numero": {
+    "39875231404063@lid": {
+      "numero": 91,
+      "tentativas": 0
+    }
+  }
+}

@@ -12,6 +12,7 @@ import { handleQuotedLinkRestriction } from "../utils/quotedLinkAction.js";
 import {
   readGroupRestrictions,
   readRestrictedMessageTypes,
+  registerMemberActivity,
 } from "../utils/database.js";
 import { hasGroupStatusMessage } from "../utils/groupStatusMessage.js";
 import { hasDirectMedia } from "../utils/index.js";
@@ -36,6 +37,11 @@ export async function messageHandler(socket, webMessage) {
     }
 
     const userLid = webMessage.key?.participant || webMessage.key?.participantAlt;
+console.log("♛ DEBUG ADM:", {
+  participant: webMessage.key?.participant,
+  participantAlt: webMessage.key?.participantAlt,
+  userLid,
+});
 
     if (!userLid) {
       return;
@@ -46,6 +52,8 @@ export async function messageHandler(socket, webMessage) {
     if (isBotOrOwner) {
       return;
     }
+
+    registerMemberActivity(remoteJid, userLid);
 
     const antiGroups = readGroupRestrictions();
     const isAntiLinkActive = !!antiGroups[remoteJid]?.["anti-link"];

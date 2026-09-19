@@ -134,28 +134,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     }
   }
 
-  if (!isBotOwner({ userLid }) && !activeGroup) {
-    if (
-      verifyPrefix(prefix, remoteJid) &&
-      hasTypeAndCommand({ type, command })
-    ) {
-      if (command.name !== "on") {
-        await sendWarningReply(
-          "Este grupo está desativado! Peça para o dono do grupo ativar o bot!"
-        );
-        return;
-      }
 
-      if (!(await checkPermission({ type, ...paramsHandler }))) {
-        await sendErrorReply(
-          "Você não tem permissão para executar este comando!"
-        );
-        return;
-      }
-    } else {
-      return;
-    }
-  }
 
   if (!verifyPrefix(prefix, remoteJid)) {
     return;

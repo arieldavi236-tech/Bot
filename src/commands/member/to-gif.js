@@ -1,24 +1,23 @@
 import fs from "fs/promises";
-import { PREFIX } from "../../config.js";
-import { InvalidParameterError } from "../../errors/index.js";
-import { toGif } from "../../services/spider-x-api.js";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { getRandomName } from "../../utils/index.js";
+import { InvalidParameterError } from "../../errors/index.js";
+
+const execFileAsync = promisify(execFile);
 
 export default {
   name: "togif",
-  description: "Transformo figurinhas animadas em GIF",
+  description: "Transforma figurinha animada em GIF",
   commands: ["togif", "gif"],
-  usage: `${PREFIX}togif (marque a figurinha)`,
-  /**
-   * @param {CommandHandleProps} props
-   */
+
   handle: async ({
     isSticker,
     downloadSticker,
     webMessage,
     sendWaitReact,
     sendSuccessReact,
-    sendGifFromURL,
+    sendGifFromFile,
   }) => {
     if (!isSticker) {
       throw new InvalidParameterError("Você precisa enviar uma figurinha!");
@@ -26,14 +25,32 @@ export default {
 
     await sendWaitReact();
 
-    const stickerPath = await downloadSticker(webMessage, getRandomName());
+    const input = await downloadSticker(webMessage, getRandomName());
+    const gif = `${input}.gif`;
+    const mp4 = `${input}.mp4`;
 
-    const stickerBuffer = await fs.readFile(stickerPath);
+    await execFileAsync("magick", [
+      input,
+      "-coalesce",
+      "-layers", "Optimize",
+      gif,
+    ]);
 
-    const gifUrl = await toGif(stickerBuffer);
+    await execFileAsync("ffmpeg", [
+      "-y",
+      "-i", gif,
+      "-movflags", "+faststart",
+      "-pix_fmt", "yuv420p",
+      "-c:v", "libx264",
+      "-an",
+      mp4,
+    ]);
 
     await sendSuccessReact();
+    await sendGifFromFile(mp4, "", null, false);
 
-    await sendGifFromURL(gifUrl);
+    await fs.unlink(input).catch(() => {});
+    await fs.unlink(gif).catch(() => {});
+    await fs.unlink(mp4).catch(() => {});
   },
 };

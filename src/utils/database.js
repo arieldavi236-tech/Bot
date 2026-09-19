@@ -28,6 +28,7 @@ const ONLY_ADMINS_FILE = "only-admins";
 const PREFIX_GROUPS_FILE = "prefix-groups";
 const RESTRICTED_MESSAGES_FILE = "restricted-messages";
 const WELCOME_GROUPS_FILE = "welcome-groups";
+const BLACKLIST_FILE = "blacklist";
 
 function createIfNotExists(fullPath, formatIfNotExists = []) {
   if (!fs.existsSync(fullPath)) {
@@ -49,6 +50,61 @@ function writeJSON(jsonFile, data, formatIfNotExists = []) {
   createIfNotExists(fullPath, formatIfNotExists);
 
   fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), "utf8");
+}
+
+
+
+// ===============================
+// LISTA NEGRA POR GRUPO
+// ===============================
+
+export function addBlacklistMember(groupId, memberId) {
+  const blacklist = readJSON(BLACKLIST_FILE, {});
+
+  if (!blacklist[groupId]) {
+    blacklist[groupId] = [];
+  }
+
+  if (blacklist[groupId].includes(memberId)) {
+    return false;
+  }
+
+  blacklist[groupId].push(memberId);
+  writeJSON(BLACKLIST_FILE, blacklist, {});
+
+  return true;
+}
+
+export function removeBlacklistMember(groupId, memberId) {
+  const blacklist = readJSON(BLACKLIST_FILE, {});
+
+  if (!blacklist[groupId]?.includes(memberId)) {
+    return false;
+  }
+
+  blacklist[groupId] = blacklist[groupId].filter(
+    (member) => member !== memberId
+  );
+
+  if (!blacklist[groupId].length) {
+    delete blacklist[groupId];
+  }
+
+  writeJSON(BLACKLIST_FILE, blacklist, {});
+
+  return true;
+}
+
+export function isBlacklistMember(groupId, memberId) {
+  const blacklist = readJSON(BLACKLIST_FILE, {});
+
+  return blacklist[groupId]?.includes(memberId) || false;
+}
+
+export function listBlacklistMembers(groupId) {
+  const blacklist = readJSON(BLACKLIST_FILE, {});
+
+  return [...(blacklist[groupId] || [])];
 }
 
 export function setAfkMember(groupId, memberId, reason) {
@@ -536,4 +592,54 @@ export function getSpiderApiToken() {
   const config = readJSON(filename, {});
 
   return config.spider_api_token || SPIDER_API_TOKEN;
+}
+// ===============================
+// ATIVIDADE DOS MEMBROS
+// ===============================
+
+const ACTIVITY_FILE = "activity";
+
+export function registerMemberActivity(groupId, memberId) {
+  const activity = readJSON(ACTIVITY_FILE, {});
+
+  if (!activity[groupId]) {
+    activity[groupId] = {};
+  }
+
+  if (!activity[groupId][memberId]) {
+    activity[groupId][memberId] = {
+      messages: 0,
+      lastActivity: Date.now(),
+    };
+  }
+
+  activity[groupId][memberId].messages += 1;
+  activity[groupId][memberId].lastActivity = Date.now();
+
+  writeJSON(ACTIVITY_FILE, activity, {});
+}
+
+export function getMemberActivity(groupId, memberId) {
+  const activity = readJSON(ACTIVITY_FILE, {});
+
+  return (
+    activity[groupId]?.[memberId] || {
+      messages: 0,
+      lastActivity: null,
+    }
+  );
+}
+
+export function getGroupActivityRanking(groupId) {
+  const activity = readJSON(ACTIVITY_FILE, {});
+
+  const members = activity[groupId] || {};
+
+  return Object.entries(members)
+    .map(([memberId, data]) => ({
+      memberId,
+      messages: data.messages || 0,
+      lastActivity: data.lastActivity || null,
+    }))
+    .sort((a, b) => b.messages - a.messages);
 }

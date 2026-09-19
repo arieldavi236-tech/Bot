@@ -1,0 +1,567 @@
+const express = require("express");
+const { execFile } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+
+const app = express();
+const PORT = 3000;
+
+app.use(express.json());
+
+const ROOT = path.resolve(process.env.HOME, "storage/ariel-bot");
+
+function pm2(args) {
+  return new Promise((resolve) => {
+    execFile("pm2", args, (error, stdout, stderr) => {
+      resolve(stdout || stderr || String(error || ""));
+    });
+  });
+}
+
+function safePath(relative = "") {
+  const target = path.resolve(ROOT, relative);
+  if (target !== ROOT && !target.startsWith(ROOT + path.sep)) {
+    throw new Error("Caminho inválido");
+  }
+  return target;
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(i ? 1 : 0)} ${units[i]}`;
+}
+
+function formatUptime(ms) {
+  if (!ms) return "-";
+  let s = Math.floor((Date.now() - ms) / 1000);
+  const d = Math.floor(s / 86400);
+  s %= 86400;
+  const h = Math.floor(s / 3600);
+  s %= 3600;
+  const m = Math.floor(s / 60);
+  s %= 60;
+
+  if (d) return `${d}d ${h}h ${m}m`;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+app.get("/", (req, res) => {
+res.send(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shizuka Host ♛</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+margin:0;
+background:#09090d;
+color:#eee;
+font-family:Arial,sans-serif;
+padding:16px;
+}
+
+.container{
+width:100%;
+max-width:620px;
+margin:auto;
+}
+
+.header{
+text-align:center;
+padding:10px 0 20px;
+}
+
+.header h1{
+margin:0;
+font-size:27px;
+}
+
+.header p{
+margin:7px 0 0;
+color:#777;
+font-size:13px;
+}
+
+.card{
+background:#121219;
+border:1px solid #292932;
+border-radius:16px;
+padding:17px;
+margin-bottom:14px;
+box-shadow:0 8px 30px #0006;
+}
+
+.card h2{
+font-size:17px;
+margin:0 0 15px;
+}
+
+.status{
+padding:12px;
+border-radius:11px;
+background:#0b0b10;
+text-align:center;
+font-weight:bold;
+margin-bottom:14px;
+}
+
+.online{color:#55e889}
+.offline{color:#ff6262}
+.loading{color:#e8c75a}
+
+.stats{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:9px;
+}
+
+.stat{
+background:#191922;
+border-radius:11px;
+padding:12px;
+}
+
+.stat span{
+display:block;
+font-size:11px;
+color:#777;
+margin-bottom:5px;
+}
+
+.stat strong{
+font-size:15px;
+}
+
+.buttons{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:9px;
+margin-top:15px;
+}
+
+button{
+border:1px solid #30303b;
+border-radius:10px;
+padding:13px 8px;
+font-size:14px;
+font-weight:bold;
+background:#1b1b24;
+color:white;
+}
+
+button:active{
+transform:scale(.97);
+}
+
+.logs{
+background:#08080c;
+border:1px solid #22222a;
+padding:12px;
+border-radius:10px;
+font-size:11px;
+line-height:1.5;
+white-space:pre-wrap;
+max-height:300px;
+overflow:auto;
+}
+
+.files{
+display:flex;
+flex-direction:column;
+gap:7px;
+}
+
+.file{
+display:flex;
+justify-content:space-between;
+align-items:center;
+background:#191922;
+padding:11px;
+border-radius:10px;
+font-size:13px;
+}
+
+.file small{
+color:#777;
+}
+
+.refresh{
+width:100%;
+margin-top:10px;
+}
+
+.footer{
+text-align:center;
+color:#555;
+font-size:11px;
+padding:8px 0 15px;
+}
+
+@media(max-width:380px){
+.stats,.buttons{
+grid-template-columns:1fr;
+}
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+<h1>𝐒𝐡𝐢𝐳𝐮𝐤𝐚 Host ♛</h1>
+<p>Painel local do Ariel Bot</p>
+</div>
+
+<div class="card">
+
+<h2>♛ Status do Bot</h2>
+
+<div id="status" class="status loading">
+⏳ CARREGANDO...
+</div>
+
+<div class="stats">
+
+<div class="stat">
+<span>PROCESSO</span>
+<strong>ariel-bot</strong>
+</div>
+
+<div class="stat">
+<span>CPU</span>
+<strong id="cpu">-</strong>
+</div>
+
+<div class="stat">
+<span>RAM</span>
+<strong id="memory">-</strong>
+</div>
+
+<div class="stat">
+<span>UPTIME</span>
+<strong id="uptime">-</strong>
+</div>
+
+</div>
+
+<div class="buttons">
+<button onclick="action('start')">▶ LIGAR</button>
+<button onclick="action('restart')">↻ REINICIAR</button>
+<button onclick="action('stop')">■ PARAR</button>
+<button onclick="loadStatus()">⟳ ATUALIZAR</button>
+</div>
+
+</div>
+
+<div class="card">
+
+<h2>📜 Logs</h2>
+
+<div class="logs" id="logs">
+Carregando logs...
+</div>
+
+</div>
+
+<div class="card">
+
+<h2>📁 Arquivos do Bot</h2>
+
+<div class="files" id="files">
+Carregando arquivos...
+</div>
+
+<button class="refresh" onclick="loadFiles()">⟳ ATUALIZAR ARQUIVOS</button>
+
+</div>
+
+<div class="footer">
+Shizuka Host ♛ • Local • Porta 3000
+</div>
+
+</div>
+
+<script>
+
+async function loadStatus(){
+
+try{
+
+const r=await fetch("/status");
+const d=await r.json();
+
+const s=document.getElementById("status");
+
+if(d.online){
+
+s.innerText="🟢 ONLINE";
+s.className="status online";
+
+}else{
+
+s.innerText="🔴 OFFLINE";
+s.className="status offline";
+
+}
+
+document.getElementById("cpu").innerText=d.cpu || "-";
+document.getElementById("memory").innerText=d.memory || "-";
+document.getElementById("uptime").innerText=d.uptime || "-";
+document.getElementById("logs").innerText=d.logs || "Sem logs.";
+
+}catch(e){
+
+const s=document.getElementById("status");
+s.innerText="⚠️ ERRO AO CONECTAR";
+s.className="status offline";
+
+}
+
+}
+
+async function action(type){
+
+const s=document.getElementById("status");
+
+s.innerText="⏳ PROCESSANDO...";
+s.className="status loading";
+
+try{
+
+await fetch("/action/"+type,{method:"POST"});
+
+}catch(e){}
+
+setTimeout(loadStatus,1200);
+
+}
+
+async function loadFiles(){
+
+const box=document.getElementById("files");
+
+try{
+
+const r=await fetch("/files");
+const files=await r.json();
+
+if(!files.length){
+
+box.innerHTML='<div class="file">Pasta vazia</div>';
+return;
+
+}
+
+box.innerHTML=files.map(f=>{
+
+const icon=f.type==="folder" ? "📁" : "📄";
+
+return '<div class="file">'+
+'<span>'+icon+' '+escapeHtml(f.name)+'</span>'+
+'<small>'+escapeHtml(f.size)+'</small>'+
+'</div>';
+
+}).join("");
+
+}catch(e){
+
+box.innerText="Erro ao carregar arquivos.";
+
+}
+
+}
+
+function escapeHtml(text){
+
+return String(text)
+.replaceAll("&","&amp;")
+.replaceAll("<","&lt;")
+.replaceAll(">","&gt;")
+.replaceAll('"',"&quot;")
+.replaceAll("'","&#039;");
+
+}
+
+loadStatus();
+loadFiles();
+
+setInterval(loadStatus,5000);
+setInterval(loadFiles,10000);
+
+</script>
+
+</body>
+</html>`);
+});
+
+app.get("/status", async (req, res) => {
+
+const result = await pm2(["jlist"]);
+
+try{
+
+const processes = JSON.parse(result);
+const bot = processes.find(p => p.name === "ariel-bot");
+
+if(!bot){
+
+return res.json({
+online:false,
+cpu:"-",
+memory:"-",
+uptime:"-",
+logs:"Processo ariel-bot não encontrado."
+});
+
+}
+
+const online = bot.pm2_env.status === "online";
+
+const cpu = bot.monit?.cpu != null
+? bot.monit.cpu + "%"
+: "-";
+
+const memory = bot.monit?.memory
+? formatBytes(bot.monit.memory)
+: "-";
+
+const uptime = bot.pm2_env.pm_uptime
+? formatUptime(bot.pm2_env.pm_uptime)
+: "-";
+
+const logs = await pm2([
+"logs",
+"ariel-bot",
+"--lines",
+"30",
+"--nostream"
+]);
+
+res.json({
+online,
+cpu,
+memory,
+uptime,
+logs
+});
+
+}catch(e){
+
+res.json({
+online:false,
+cpu:"-",
+memory:"-",
+uptime:"-",
+logs:result
+});
+
+}
+
+});
+
+app.post("/action/start", async (req,res)=>{
+
+await pm2(["start","ariel-bot"]);
+
+res.json({ok:true});
+
+});
+
+app.post("/action/restart", async (req,res)=>{
+
+await pm2(["restart","ariel-bot"]);
+
+res.json({ok:true});
+
+});
+
+app.post("/action/stop", async (req,res)=>{
+
+await pm2(["stop","ariel-bot"]);
+
+res.json({ok:true});
+
+});
+
+app.get("/files", (req,res)=>{
+
+try{
+
+const dir = safePath("");
+
+const entries = fs.readdirSync(dir,{withFileTypes:true});
+
+const files = entries
+.sort((a,b)=>{
+
+if(a.isDirectory() && !b.isDirectory()) return -1;
+if(!a.isDirectory() && b.isDirectory()) return 1;
+return a.name.localeCompare(b.name);
+
+})
+.map(entry=>{
+
+const full = path.join(dir,entry.name);
+
+let size = "Pasta";
+
+if(entry.isFile()){
+
+try{
+
+size = formatBytes(fs.statSync(full).size);
+
+}catch{
+
+size="-";
+
+}
+
+}
+
+return {
+name:entry.name,
+type:entry.isDirectory() ? "folder" : "file",
+size
+};
+
+});
+
+res.json(files);
+
+}catch(e){
+
+res.status(500).json({
+error:e.message
+});
+
+}
+
+});
+
+app.listen(PORT,"0.0.0.0",()=>{
+
+console.log("");
+console.log("╭──────────────────────────────╮");
+console.log("│    𝐒𝐡𝐢𝐳𝐮𝐤𝐚 Host ♛           │");
+console.log("│    Painel V3 iniciado!       │");
+console.log("╰──────────────────────────────╯");
+console.log("");
+console.log("Abra no Chrome:");
+console.log("http://localhost:" + PORT);
+console.log("");
+
+});

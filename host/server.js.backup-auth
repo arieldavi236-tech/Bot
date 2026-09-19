@@ -1,0 +1,787 @@
+const express = require("express");
+const { execFile } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+// Credenciais atuais do painel.
+// Depois podemos mover isso para variáveis de ambiente.
+const HOST_USER = "ariel";
+const HOST_PASS = "shizuka3000";
+
+app.use(express.json());
+
+// ===============================
+// AUTENTICAÇÃO
+// ===============================
+
+app.use((req, res, next) => {
+  const auth = req.headers.authorization;
+
+  if (!auth || !auth.startsWith("Basic ")) {
+    res.setHeader("WWW-Authenticate", 'Basic realm="Shizuka Host ♛"');
+    return res.status(401).send("Autenticação necessária.");
+  }
+
+  const encoded = auth.split(" ")[1];
+
+  let decoded;
+
+  try {
+    decoded = Buffer.from(encoded, "base64").toString("utf8");
+  } catch {
+    return res.status(401).send("Autenticação inválida.");
+  }
+
+  const separator = decoded.indexOf(":");
+
+  if (separator === -1) {
+    return res.status(401).send("Autenticação inválida.");
+  }
+
+  const user = decoded.slice(0, separator);
+  const pass = decoded.slice(separator + 1);
+
+  if (user !== HOST_USER || pass !== HOST_PASS) {
+    res.setHeader("WWW-Authenticate", 'Basic realm="Shizuka Host ♛"');
+    return res.status(401).send("Usuário ou senha incorretos.");
+  }
+
+  next();
+});
+
+// ===============================
+// CAMINHO DO BOT
+// ===============================
+
+const ROOT =
+  process.env.SHIZUKA_ROOT ||
+  path.resolve(__dirname, "..");
+
+// ===============================
+// PM2
+// ===============================
+
+function pm2(args) {
+  return new Promise((resolve, reject) => {
+    execFile("pm2", args, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr || error.message));
+        return;
+      }
+
+      resolve(stdout || stderr || "");
+    });
+  });
+}
+
+// ===============================
+// UTILIDADES
+// ===============================
+
+function safePath(relative = "") {
+  const target = path.resolve(ROOT, relative);
+
+  if (target !== ROOT && !target.startsWith(ROOT + path.sep)) {
+    throw new Error("Caminho inválido.");
+  }
+
+  return target;
+}
+
+function formatBytes(bytes = 0) {
+  if (!Number.isFinite(bytes)) return "0 B";
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function formatUptime(ms = 0) {
+  const seconds = Math.floor(ms / 1000);
+
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (days > 0) {
+    return `${days}d ${String(hours).padStart(2, "0")}h`;
+  }
+
+  return [
+    String(hours).padStart(2, "0"),
+    String(minutes).padStart(2, "0"),
+    String(secs).padStart(2, "0"),
+  ].join(":");
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// ===============================
+// PAINEL
+// ===============================
+
+app.get("/", (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+
+<title>Shizuka Host ♛</title>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background:
+    radial-gradient(circle at top, #202020 0%, #0b0b0b 45%, #050505 100%);
+  color: #f5f5f5;
+  min-height: 100vh;
+}
+
+.container {
+  width: min(1100px, 94%);
+  margin: auto;
+  padding: 25px 0 40px;
+}
+
+.header {
+  text-align: center;
+  padding: 25px 15px 30px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 1px;
+}
+
+.header p {
+  margin-top: 8px;
+  color: #aaa;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 15px;
+}
+
+.card {
+  background: rgba(20,20,20,.92);
+  border: 1px solid #303030;
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+
+.status {
+  padding: 14px;
+  border-radius: 12px;
+  font-weight: bold;
+  margin-top: 12px;
+}
+
+.online {
+  background: rgba(0, 170, 80, .12);
+  border: 1px solid rgba(0, 220, 100, .35);
+}
+
+.offline {
+  background: rgba(220, 50, 50, .12);
+  border: 1px solid rgba(255, 80, 80, .35);
+}
+
+.loading {
+  background: rgba(255,255,255,.05);
+  border: 1px solid #333;
+}
+
+.stat {
+  margin: 12px 0;
+}
+
+.stat-label {
+  color: #999;
+  font-size: 13px;
+}
+
+.stat-value {
+  font-size: 20px;
+  margin-top: 4px;
+}
+
+button {
+  width: 100%;
+  border: 1px solid #333;
+  background: #171717;
+  color: white;
+  padding: 13px;
+  border-radius: 10px;
+  margin-top: 8px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #252525;
+}
+
+.logs {
+  white-space: pre-wrap;
+  background: #050505;
+  border: 1px solid #252525;
+  border-radius: 10px;
+  padding: 13px;
+  max-height: 320px;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.files {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.file {
+  padding: 9px 0;
+  border-bottom: 1px solid #222;
+  font-size: 13px;
+}
+
+.footer {
+  text-align: center;
+  color: #666;
+  margin-top: 25px;
+  font-size: 12px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>𝐒𝐡𝐢𝐳𝐮𝐤𝐚 Host ♛</h1>
+    <p>Painel local do Ariel Bot</p>
+  </div>
+
+  <div class="grid">
+
+    <div class="card">
+
+      <h2>♛ Status do Bot</h2>
+
+      <div id="status" class="status loading">
+        Carregando...
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Processo</div>
+        <div id="process" class="stat-value">---</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Uptime</div>
+        <div id="uptime" class="stat-value">---</div>
+      </div>
+
+      <div id="watchdog" class="status loading">
+        🛡️ WATCHDOG: CARREGANDO...
+      </div>
+
+    </div>
+
+    <div class="card">
+
+      <h2>📊 Recursos</h2>
+
+      <div class="stat">
+        <div class="stat-label">CPU do bot</div>
+        <div id="cpu" class="stat-value">---</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">RAM do bot</div>
+        <div id="memory" class="stat-value">---</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">RAM do sistema</div>
+        <div id="systemMemory" class="stat-value">---</div>
+      </div>
+
+    </div>
+
+    <div class="card">
+
+      <h2>⚙️ Controle</h2>
+
+      <button onclick="action('start')">
+        ▶️ Iniciar Bot
+      </button>
+
+      <button onclick="action('restart')">
+        🔄 Reiniciar Bot
+      </button>
+
+      <button onclick="action('stop')">
+        ⏹️ Parar Bot
+      </button>
+
+    </div>
+
+  </div>
+
+  <div class="card" style="margin-top:15px">
+
+    <h2>📝 Logs</h2>
+
+    <div id="logs" class="logs">
+      Carregando logs...
+    </div>
+
+  </div>
+
+  <div class="card" style="margin-top:15px">
+
+    <h2>📁 Arquivos do Bot</h2>
+
+    <div id="files" class="files">
+      Carregando arquivos...
+    </div>
+
+  </div>
+
+  <div class="footer">
+    Shizuka Host ♛ • Painel de gerenciamento
+  </div>
+
+</div>
+
+<script>
+
+async function loadStatus() {
+
+  try {
+
+    const response = await fetch("/status");
+    const data = await response.json();
+
+    const status = document.getElementById("status");
+    const watchdog = document.getElementById("watchdog");
+
+    if (data.online) {
+
+      status.innerText = "🟢 ONLINE";
+      status.className = "status online";
+
+    } else {
+
+      status.innerText = "🔴 OFFLINE";
+      status.className = "status offline";
+
+    }
+
+    document.getElementById("process").innerText =
+      data.name || "ariel-bot";
+
+    document.getElementById("cpu").innerText =
+      data.cpu || "0%";
+
+    document.getElementById("memory").innerText =
+      data.memory || "0 MB";
+
+    document.getElementById("systemMemory").innerText =
+      data.systemMemory || "0%";
+
+    document.getElementById("uptime").innerText =
+      data.uptime || "00:00:00";
+
+    if (data.watchdog) {
+
+      watchdog.innerText = "🛡️ WATCHDOG: ONLINE";
+      watchdog.className = "status online";
+
+    } else {
+
+      watchdog.innerText = "🛡️ WATCHDOG: OFFLINE";
+      watchdog.className = "status offline";
+
+    }
+
+    document.getElementById("logs").innerText =
+      data.logs || "Nenhum log disponível.";
+
+  } catch (error) {
+
+    document.getElementById("status").innerText =
+      "⚠️ ERRO DE CONEXÃO";
+
+    document.getElementById("status").className =
+      "status offline";
+
+  }
+
+}
+
+async function action(type) {
+
+  try {
+
+    const response = await fetch("/action/" + type, {
+      method: "POST"
+    });
+
+    const data = await response.json();
+
+    alert(data.message || "Ação executada.");
+
+    setTimeout(loadStatus, 1000);
+
+  } catch {
+
+    alert("Erro ao executar ação.");
+
+  }
+
+}
+
+async function loadFiles() {
+
+  try {
+
+    const response = await fetch("/files");
+    const data = await response.json();
+
+    const container = document.getElementById("files");
+
+    if (!data.files || data.files.length === 0) {
+
+      container.innerHTML = "Nenhum arquivo encontrado.";
+      return;
+
+    }
+
+    container.innerHTML = data.files.map(file => {
+
+      const icon = file.type === "folder" ? "📁" : "📄";
+
+      return \`
+        <div class="file">
+          \${icon} \${file.name}
+        </div>
+      \`;
+
+    }).join("");
+
+  } catch {
+
+    document.getElementById("files").innerText =
+      "Erro ao carregar arquivos.";
+
+  }
+
+}
+
+loadStatus();
+loadFiles();
+
+setInterval(loadStatus, 5000);
+
+</script>
+
+</body>
+</html>`);
+});
+
+// ===============================
+// STATUS
+// ===============================
+
+app.get("/status", async (req, res) => {
+
+  try {
+
+    const result = await pm2(["jlist"]);
+
+    const processes = JSON.parse(result);
+
+    const bot = processes.find(
+      (process) => process.name === "ariel-bot"
+    );
+
+    const watchdog = processes.find(
+      (process) => process.name === "shizuka-watchdog"
+    );
+
+    if (!bot) {
+
+      return res.json({
+        online: false,
+        name: "ariel-bot",
+        cpu: "0%",
+        memory: "0 MB",
+        systemMemory: "0%",
+        uptime: "00:00:00",
+        watchdog: Boolean(
+          watchdog?.pm2_env?.status === "online"
+        ),
+        logs: "Processo ariel-bot não encontrado."
+      });
+
+    }
+
+    let logs = "";
+
+    try {
+
+      logs = await pm2([
+        "logs",
+        "ariel-bot",
+        "--lines",
+        "25",
+        "--nostream"
+      ]);
+
+    } catch (error) {
+
+      logs = error.message;
+
+    }
+
+    const totalMemory = process.memoryUsage();
+
+    const systemMemory = (
+      (1 -
+        (require("os").freemem() /
+          require("os").totalmem())) *
+      100
+    ).toFixed(1);
+
+    res.json({
+
+      online:
+        bot.pm2_env?.status === "online",
+
+      name:
+        bot.name,
+
+      cpu:
+        `${bot.monit?.cpu ?? 0}%`,
+
+      memory:
+        formatBytes(
+          bot.monit?.memory ?? 0
+        ),
+
+      systemMemory:
+        `${systemMemory}%`,
+
+      uptime:
+        bot.pm2_env?.pm_uptime
+          ? formatUptime(
+              Date.now() -
+              bot.pm2_env.pm_uptime
+            )
+          : "00:00:00",
+
+      watchdog:
+        watchdog?.pm2_env?.status === "online",
+
+      logs:
+        logs || "Nenhum log disponível.",
+
+      hostMemory:
+        formatBytes(totalMemory.rss)
+
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      online: false,
+      error: error.message
+    });
+
+  }
+
+});
+
+// ===============================
+// AÇÕES
+// ===============================
+
+app.post("/action/start", async (req, res) => {
+
+  try {
+
+    await pm2(["start", "ariel-bot"]);
+
+    res.json({
+      success: true,
+      message: "Bot iniciado com sucesso."
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+
+});
+
+app.post("/action/restart", async (req, res) => {
+
+  try {
+
+    await pm2(["restart", "ariel-bot"]);
+
+    res.json({
+      success: true,
+      message: "Bot reiniciado com sucesso."
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+
+});
+
+app.post("/action/stop", async (req, res) => {
+
+  try {
+
+    await pm2(["stop", "ariel-bot"]);
+
+    res.json({
+      success: true,
+      message: "Bot parado."
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+
+});
+
+// ===============================
+// ARQUIVOS
+// ===============================
+
+app.get("/files", (req, res) => {
+
+  try {
+
+    const relative =
+      req.query.path || "";
+
+    const directory =
+      safePath(relative);
+
+    const entries =
+      fs.readdirSync(
+        directory,
+        { withFileTypes: true }
+      );
+
+    const files =
+      entries.map(entry => ({
+
+        name: entry.name,
+
+        type:
+          entry.isDirectory()
+            ? "folder"
+            : "file"
+
+      }));
+
+    res.json({
+      path: relative,
+      files
+    });
+
+  } catch (error) {
+
+    res.status(400).json({
+      error: error.message
+    });
+
+  }
+
+});
+
+// ===============================
+// SERVIDOR
+// ===============================
+
+app.listen(PORT, () => {
+
+  console.log("");
+  console.log("╭──────────────────────────────╮");
+  console.log("│       Shizuka Host ♛         │");
+  console.log("│       Painel iniciado         │");
+  console.log("╰──────────────────────────────╯");
+  console.log("");
+  console.log(`Porta: ${PORT}`);
+  console.log(`Bot: ${ROOT}`);
+  console.log("");
+
+});

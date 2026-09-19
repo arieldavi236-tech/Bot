@@ -1,0 +1,1227 @@
+const express = require("express");
+const { execFile } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+const HOST_USER = "ariel";
+const HOST_PASS = "shizuka3000";
+
+const BOT_NAME = "ariel-bot";
+const WATCHDOG_NAME = "shizuka-watchdog";
+
+app.use(express.json());
+
+// =====================================================
+// AUTENTICAÇÃO
+// =====================================================
+
+app.use((req, res, next) => {
+  const auth = req.headers.authorization;
+
+  if (!auth || !auth.startsWith("Basic ")) {
+    res.setHeader(
+      "WWW-Authenticate",
+      'Basic realm="Shizuka Host"'
+    );
+
+    return res.status(401).send("Autenticação necessária.");
+  }
+
+  const encoded = auth.split(" ")[1];
+
+  let decoded;
+
+  try {
+    decoded = Buffer.from(encoded, "base64").toString("utf8");
+  } catch {
+    return res.status(401).send("Autenticação inválida.");
+  }
+
+  const separator = decoded.indexOf(":");
+
+  if (separator === -1) {
+    return res.status(401).send("Autenticação inválida.");
+  }
+
+  const user = decoded.slice(0, separator);
+  const pass = decoded.slice(separator + 1);
+
+  if (user !== HOST_USER || pass !== HOST_PASS) {
+    res.setHeader(
+      "WWW-Authenticate",
+      'Basic realm="Shizuka Host"'
+    );
+
+    return res.status(401).send("Usuário ou senha incorretos.");
+  }
+
+  next();
+});
+
+// =====================================================
+// CAMINHO DO BOT
+// =====================================================
+
+const ROOT =
+  process.env.SHIZUKA_ROOT ||
+  path.resolve(__dirname, "..");
+
+// =====================================================
+// PM2
+// =====================================================
+
+function pm2(args) {
+  return new Promise((resolve, reject) => {
+    execFile("pm2", args, (error, stdout, stderr) => {
+      if (error) {
+        reject(
+          new Error(
+            String(stderr || error.message).trim()
+          )
+        );
+
+        return;
+      }
+
+      resolve(stdout || stderr || "");
+    });
+  });
+}
+
+// =====================================================
+// UTILIDADES
+// =====================================================
+
+function safePath(relative = "") {
+  const target = path.resolve(ROOT, relative);
+
+  if (
+    target !== ROOT &&
+    !target.startsWith(ROOT + path.sep)
+  ) {
+    throw new Error("Caminho inválido.");
+  }
+
+  return target;
+}
+
+function formatBytes(bytes = 0) {
+  if (!Number.isFinite(bytes)) {
+    return "0 B";
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function formatUptime(ms = 0) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (days > 0) {
+    return `${days}d ${String(hours).padStart(2, "0")}h`;
+  }
+
+  return [
+    String(hours).padStart(2, "0"),
+    String(minutes).padStart(2, "0"),
+    String(secs).padStart(2, "0")
+  ].join(":");
+}
+
+// Remove códigos ANSI dos logs do PM2
+function cleanLogs(text = "") {
+  return String(text)
+    .replace(
+      /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g,
+      ""
+    )
+    .replace(/\r/g, "")
+    .trim();
+}
+
+function systemMemoryPercent() {
+  const total = os.totalmem();
+  const free = os.freemem();
+
+  if (!total) {
+    return 0;
+  }
+
+  return ((1 - free / total) * 100).toFixed(1);
+}
+
+// =====================================================
+// PAINEL
+// =====================================================
+
+app.get("/", (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+
+<title>Shizuka Host ♛</title>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background:
+    radial-gradient(
+      circle at top,
+      #202020 0%,
+      #0b0b0b 45%,
+      #050505 100%
+    );
+  color: #f5f5f5;
+  min-height: 100vh;
+}
+
+.container {
+  width: min(1100px, 94%);
+  margin: auto;
+  padding: 25px 0 40px;
+}
+
+.header {
+  text-align: center;
+  padding: 25px 15px 30px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 1px;
+}
+
+.header p {
+  margin-top: 8px;
+  color: #aaa;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(260px, 1fr));
+  gap: 15px;
+}
+
+.card {
+  background: rgba(20,20,20,.94);
+  border: 1px solid #303030;
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow:
+    0 10px 30px rgba(0,0,0,.25);
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+
+.status {
+  padding: 14px;
+  border-radius: 12px;
+  font-weight: bold;
+  margin-top: 12px;
+  transition: .2s;
+}
+
+.online {
+  background: rgba(0,170,80,.12);
+  border: 1px solid rgba(0,220,100,.35);
+}
+
+.offline {
+  background: rgba(220,50,50,.12);
+  border: 1px solid rgba(255,80,80,.35);
+}
+
+.loading {
+  background: rgba(255,255,255,.05);
+  border: 1px solid #333;
+}
+
+.stat {
+  margin: 13px 0;
+}
+
+.stat-label {
+  color: #999;
+  font-size: 13px;
+}
+
+.stat-value {
+  font-size: 20px;
+  margin-top: 5px;
+  font-weight: bold;
+}
+
+.progress {
+  width: 100%;
+  height: 7px;
+  background: #292929;
+  border-radius: 20px;
+  overflow: hidden;
+  margin-top: 7px;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: #eee;
+  border-radius: 20px;
+  transition: width .4s;
+}
+
+button {
+  width: 100%;
+  border: 1px solid #333;
+  background: #171717;
+  color: white;
+  padding: 13px;
+  border-radius: 10px;
+  margin-top: 8px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: .2s;
+}
+
+button:hover {
+  background: #292929;
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: .5;
+  cursor: wait;
+  transform: none;
+}
+
+.logs {
+  white-space: pre-wrap;
+  background: #050505;
+  border: 1px solid #252525;
+  border-radius: 10px;
+  padding: 13px;
+  max-height: 320px;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 12px;
+  color: #ccc;
+  line-height: 1.45;
+}
+
+.files {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.file {
+  padding: 10px 4px;
+  border-bottom: 1px solid #222;
+  font-size: 13px;
+}
+
+.file:last-child {
+  border-bottom: none;
+}
+
+.file.folder {
+  color: #eee;
+}
+
+.file.file-item {
+  color: #aaa;
+}
+
+.watchdog-info {
+  font-size: 12px;
+  color: #999;
+  margin-top: 7px;
+}
+
+.action-message {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 9px;
+  background: #151515;
+  border: 1px solid #292929;
+  color: #bbb;
+  font-size: 13px;
+  display: none;
+}
+
+.footer {
+  text-align: center;
+  color: #666;
+  margin-top: 25px;
+  font-size: 12px;
+}
+
+.refresh {
+  font-size: 12px;
+  color: #777;
+  text-align: center;
+  margin-top: 10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+
+    <h1>𝐒𝐡𝐢𝐳𝐮𝐤𝐚 Host ♛</h1>
+
+    <p>Painel local do Ariel Bot</p>
+
+  </div>
+
+  <div class="grid">
+
+    <!-- STATUS -->
+
+    <div class="card">
+
+      <h2>♛ Status do Bot</h2>
+
+      <div id="status" class="status loading">
+        Carregando...
+      </div>
+
+      <div class="stat">
+
+        <div class="stat-label">
+          Processo
+        </div>
+
+        <div id="process" class="stat-value">
+          ---
+        </div>
+
+      </div>
+
+      <div class="stat">
+
+        <div class="stat-label">
+          Uptime
+        </div>
+
+        <div id="uptime" class="stat-value">
+          ---
+        </div>
+
+      </div>
+
+      <div id="watchdog" class="status loading">
+        🛡️ WATCHDOG: CARREGANDO...
+      </div>
+
+      <div
+        id="watchdogInfo"
+        class="watchdog-info"
+      >
+        Verificando proteção...
+      </div>
+
+    </div>
+
+    <!-- RECURSOS -->
+
+    <div class="card">
+
+      <h2>📊 Recursos</h2>
+
+      <div class="stat">
+
+        <div class="stat-label">
+          CPU do bot
+        </div>
+
+        <div id="cpu" class="stat-value">
+          ---
+        </div>
+
+        <div class="progress">
+          <div
+            id="cpuBar"
+            class="progress-bar"
+          ></div>
+        </div>
+
+      </div>
+
+      <div class="stat">
+
+        <div class="stat-label">
+          RAM do bot
+        </div>
+
+        <div id="memory" class="stat-value">
+          ---
+        </div>
+
+      </div>
+
+      <div class="stat">
+
+        <div class="stat-label">
+          RAM do sistema
+        </div>
+
+        <div id="systemMemory" class="stat-value">
+          ---
+        </div>
+
+        <div class="progress">
+          <div
+            id="ramBar"
+            class="progress-bar"
+          ></div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- CONTROLE -->
+
+    <div class="card">
+
+      <h2>⚙️ Controle</h2>
+
+      <button
+        id="startBtn"
+        onclick="action('start')"
+      >
+        ▶️ Iniciar Bot
+      </button>
+
+      <button
+        id="restartBtn"
+        onclick="action('restart')"
+      >
+        🔄 Reiniciar Bot
+      </button>
+
+      <button
+        id="stopBtn"
+        onclick="action('stop')"
+      >
+        ⏹️ Parar Bot
+      </button>
+
+      <div
+        id="actionMessage"
+        class="action-message"
+      ></div>
+
+    </div>
+
+  </div>
+
+  <!-- LOGS -->
+
+  <div
+    class="card"
+    style="margin-top:15px"
+  >
+
+    <h2>📝 Logs</h2>
+
+    <div id="logs" class="logs">
+      Carregando logs...
+    </div>
+
+    <div class="refresh">
+      Atualização automática a cada 5 segundos
+    </div>
+
+  </div>
+
+  <!-- ARQUIVOS -->
+
+  <div
+    class="card"
+    style="margin-top:15px"
+  >
+
+    <h2>📁 Arquivos do Bot</h2>
+
+    <div id="files" class="files">
+      Carregando arquivos...
+    </div>
+
+  </div>
+
+  <div class="footer">
+    Shizuka Host ♛ • Painel de gerenciamento
+  </div>
+
+</div>
+
+<script>
+
+function setButtonState(disabled) {
+
+  document
+    .querySelectorAll("button")
+    .forEach(button => {
+      button.disabled = disabled;
+    });
+
+}
+
+function showActionMessage(message) {
+
+  const box =
+    document.getElementById("actionMessage");
+
+  box.innerText = message;
+  box.style.display = "block";
+
+  setTimeout(() => {
+    box.style.display = "none";
+  }, 3500);
+
+}
+
+async function loadStatus() {
+
+  try {
+
+    const response =
+      await fetch("/status", {
+        cache: "no-store"
+      });
+
+    if (!response.ok) {
+      throw new Error("Erro no status");
+    }
+
+    const data =
+      await response.json();
+
+    const status =
+      document.getElementById("status");
+
+    const watchdog =
+      document.getElementById("watchdog");
+
+    if (data.online) {
+
+      status.innerText = "🟢 ONLINE";
+      status.className = "status online";
+
+    } else {
+
+      status.innerText = "🔴 OFFLINE";
+      status.className = "status offline";
+
+    }
+
+    document.getElementById("process").innerText =
+      data.name || "ariel-bot";
+
+    document.getElementById("cpu").innerText =
+      data.cpu || "0%";
+
+    document.getElementById("memory").innerText =
+      data.memory || "0 MB";
+
+    document.getElementById("systemMemory").innerText =
+      data.systemMemory || "0%";
+
+    document.getElementById("uptime").innerText =
+      data.uptime || "00:00:00";
+
+    const cpuValue =
+      parseFloat(data.cpu) || 0;
+
+    const ramValue =
+      parseFloat(data.systemMemory) || 0;
+
+    document.getElementById("cpuBar").style.width =
+      Math.min(cpuValue, 100) + "%";
+
+    document.getElementById("ramBar").style.width =
+      Math.min(ramValue, 100) + "%";
+
+    if (data.watchdog) {
+
+      watchdog.innerText =
+        "🛡️ WATCHDOG: ONLINE";
+
+      watchdog.className =
+        "status online";
+
+      document.getElementById(
+        "watchdogInfo"
+      ).innerText =
+        "Proteção automática ativa.";
+
+    } else {
+
+      watchdog.innerText =
+        "🛡️ WATCHDOG: OFFLINE";
+
+      watchdog.className =
+        "status offline";
+
+      document.getElementById(
+        "watchdogInfo"
+      ).innerText =
+        "O watchdog não está ativo.";
+
+    }
+
+    document.getElementById("logs").innerText =
+      data.logs ||
+      "Nenhum log disponível.";
+
+  } catch (error) {
+
+    const status =
+      document.getElementById("status");
+
+    status.innerText =
+      "⚠️ ERRO DE CONEXÃO";
+
+    status.className =
+      "status offline";
+
+  }
+
+}
+
+async function action(type) {
+
+  setButtonState(true);
+
+  const names = {
+    start: "Iniciando bot...",
+    restart: "Reiniciando bot...",
+    stop: "Parando bot..."
+  };
+
+  showActionMessage(
+    names[type] || "Executando..."
+  );
+
+  try {
+
+    const response =
+      await fetch(
+        "/action/" + type,
+        {
+          method: "POST"
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (data.success) {
+
+      showActionMessage(
+        "✓ " + data.message
+      );
+
+    } else {
+
+      showActionMessage(
+        "⚠️ " + (
+          data.message ||
+          "Não foi possível executar."
+        )
+      );
+
+    }
+
+    setTimeout(
+      loadStatus,
+      1200
+    );
+
+  } catch {
+
+    showActionMessage(
+      "⚠️ Erro ao executar ação."
+    );
+
+  } finally {
+
+    setTimeout(
+      () => setButtonState(false),
+      1200
+    );
+
+  }
+
+}
+
+async function loadFiles() {
+
+  try {
+
+    const response =
+      await fetch(
+        "/files",
+        {
+          cache: "no-store"
+        }
+      );
+
+    const data =
+      await response.json();
+
+    const container =
+      document.getElementById("files");
+
+    if (
+      !data.files ||
+      data.files.length === 0
+    ) {
+
+      container.innerText =
+        "Nenhum arquivo encontrado.";
+
+      return;
+
+    }
+
+    container.innerHTML =
+      data.files.map(file => {
+
+        const icon =
+          file.type === "folder"
+            ? "📁"
+            : "📄";
+
+        const className =
+          file.type === "folder"
+            ? "folder"
+            : "file-item";
+
+        return \`
+          <div class="file \${className}">
+            \${icon} \${file.name}
+          </div>
+        \`;
+
+      }).join("");
+
+  } catch {
+
+    document.getElementById(
+      "files"
+    ).innerText =
+      "Erro ao carregar arquivos.";
+
+  }
+
+}
+
+loadStatus();
+loadFiles();
+
+setInterval(
+  loadStatus,
+  5000
+);
+
+</script>
+
+</body>
+
+</html>`);
+});
+
+// =====================================================
+// STATUS
+// =====================================================
+
+app.get("/status", async (req, res) => {
+
+  try {
+
+    const result =
+      await pm2(["jlist"]);
+
+    const processes =
+      JSON.parse(result);
+
+    const bot =
+      processes.find(
+        process =>
+          process.name === BOT_NAME
+      );
+
+    const watchdog =
+      processes.find(
+        process =>
+          process.name === WATCHDOG_NAME
+      );
+
+    const watchdogOnline =
+      watchdog?.pm2_env?.status === "online";
+
+    if (!bot) {
+
+      return res.json({
+
+        online: false,
+
+        name: BOT_NAME,
+
+        cpu: "0%",
+
+        memory: "0 MB",
+
+        systemMemory:
+          `${systemMemoryPercent()}%`,
+
+        uptime: "00:00:00",
+
+        watchdog:
+          watchdogOnline,
+
+        logs:
+          "Processo ariel-bot não encontrado."
+
+      });
+
+    }
+
+    let logs = "";
+
+    try {
+
+      logs =
+        await pm2([
+          "logs",
+          BOT_NAME,
+          "--lines",
+          "25",
+          "--nostream",
+          "--raw"
+        ]);
+
+      logs =
+        cleanLogs(logs);
+
+    } catch (error) {
+
+      logs =
+        cleanLogs(error.message);
+
+    }
+
+    res.json({
+
+      online:
+        bot.pm2_env?.status === "online",
+
+      name:
+        bot.name,
+
+      cpu:
+        `${bot.monit?.cpu ?? 0}%`,
+
+      memory:
+        formatBytes(
+          bot.monit?.memory ?? 0
+        ),
+
+      systemMemory:
+        `${systemMemoryPercent()}%`,
+
+      uptime:
+        bot.pm2_env?.pm_uptime
+          ? formatUptime(
+              Date.now() -
+              bot.pm2_env.pm_uptime
+            )
+          : "00:00:00",
+
+      watchdog:
+        watchdogOnline,
+
+      logs:
+        logs ||
+        "Nenhum log disponível.",
+
+      hostMemory:
+        formatBytes(
+          process.memoryUsage().rss
+        )
+
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+
+      online: false,
+
+      error: error.message
+
+    });
+
+  }
+
+});
+
+// =====================================================
+// AÇÕES
+// =====================================================
+
+app.post("/action/start", async (req, res) => {
+
+  try {
+
+    await pm2([
+      "start",
+      BOT_NAME
+    ]);
+
+    res.json({
+
+      success: true,
+
+      message:
+        "Bot iniciado com sucesso."
+
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+
+      success: false,
+
+      message:
+        error.message
+
+    });
+
+  }
+
+});
+
+app.post("/action/restart", async (req, res) => {
+
+  try {
+
+    await pm2([
+      "restart",
+      BOT_NAME
+    ]);
+
+    res.json({
+
+      success: true,
+
+      message:
+        "Bot reiniciado com sucesso."
+
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+
+      success: false,
+
+      message:
+        error.message
+
+    });
+
+  }
+
+});
+
+app.post("/action/stop", async (req, res) => {
+
+  try {
+
+    await pm2([
+      "stop",
+      BOT_NAME
+    ]);
+
+    res.json({
+
+      success: true,
+
+      message:
+        "Bot parado."
+
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+
+      success: false,
+
+      message:
+        error.message
+
+    });
+
+  }
+
+});
+
+// =====================================================
+// ARQUIVOS
+// =====================================================
+
+app.get("/files", (req, res) => {
+
+  try {
+
+    const relative =
+      req.query.path || "";
+
+    const directory =
+      safePath(relative);
+
+    const entries =
+      fs.readdirSync(
+        directory,
+        {
+          withFileTypes: true
+        }
+      );
+
+    const files =
+      entries
+        .sort((a, b) => {
+
+          if (
+            a.isDirectory() &&
+            !b.isDirectory()
+          ) {
+            return -1;
+          }
+
+          if (
+            !a.isDirectory() &&
+            b.isDirectory()
+          ) {
+            return 1;
+          }
+
+          return a.name.localeCompare(
+            b.name
+          );
+
+        })
+        .map(entry => ({
+
+          name:
+            entry.name,
+
+          type:
+            entry.isDirectory()
+              ? "folder"
+              : "file"
+
+        }));
+
+    res.json({
+
+      path:
+        relative,
+
+      files
+
+    });
+
+  } catch (error) {
+
+    res.status(400).json({
+
+      error:
+        error.message
+
+    });
+
+  }
+
+});
+
+// =====================================================
+// SERVIDOR
+// =====================================================
+
+app.listen(PORT, () => {
+
+  console.log("");
+
+  console.log(
+    "╭──────────────────────────────╮"
+  );
+
+  console.log(
+    "│       Shizuka Host ♛         │"
+  );
+
+  console.log(
+    "│       Painel iniciado         │"
+  );
+
+  console.log(
+    "╰──────────────────────────────╯"
+  );
+
+  console.log("");
+
+  console.log(`Porta: ${PORT}`);
+  console.log(`Bot: ${ROOT}`);
+
+  console.log("");
+
+});

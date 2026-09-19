@@ -3,6 +3,7 @@
  *
  * @author Dev Gui
  */
+
 import { messageHandler } from "./messageHandler.js";
 import { onGroupParticipantsUpdate } from "./onGroupParticipantsUpdate.js";
 import { onMessagesUpsert } from "./onMesssagesUpsert.js";
@@ -53,16 +54,16 @@ export function isLink(text) {
     /\.(txt|pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|exe|jpg|jpeg|png|gif|mp4|mp3|avi)$/i;
 
   return matches.some((match) => {
-    const cleanMatch = match.replace(/^https?:\/\//, "").replace(/^www\./, "");
+    const cleanMatch = match
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "");
 
     const matchIndex = cleanText.indexOf(match);
 
     const beforeMatch = cleanText.substring(0, matchIndex);
-
     const afterMatch = cleanText.substring(matchIndex + match.length);
 
     const charBefore = beforeMatch.slice(-1);
-
     const charAfter = afterMatch.slice(0, 1);
 
     if (
@@ -90,39 +91,68 @@ export function isLink(text) {
     }
 
     const domainPart = cleanMatch.split("/")[0];
+
     if (domainPart.split(".").length < 2) {
       return false;
     }
 
     const parts = domainPart.split(".");
     const extension = parts[parts.length - 1];
+
     if (extension.length < 2) {
       return false;
     }
 
     try {
       const url = new URL("https://" + cleanMatch);
-      return url.hostname.includes(".") && url.hostname.length > 4;
+
+      return (
+        url.hostname.includes(".") &&
+        url.hostname.length > 4
+      );
     } catch {
       return false;
     }
   });
 }
 
-export async function isAdmin({ remoteJid, userLid, socket }) {
-  const { participants, owner } = await socket.groupMetadata(remoteJid);
+export async function isAdmin({
+  remoteJid,
+  userLid,
+  socket,
+}) {
+  const { participants, owner } =
+    await socket.groupMetadata(remoteJid);
+
+  console.log(
+    "♛ DEBUG GRUPO:",
+    participants.map((p) => ({
+      id: p.id,
+      lid: p.lid,
+      jid: p.jid,
+      admin: p.admin,
+    }))
+  );
+
+  console.log("♛ DEBUG USUARIO:", userLid);
 
   const participant = participants.find(
-    (participant) => participant.id === userLid
+    (participant) =>
+      participant.id === userLid ||
+      participant.lid === userLid ||
+      participant.jid === userLid
   );
 
   if (!participant) {
     return userLid === OWNER_LID;
   }
 
-  const isOwner = userLid === owner || participant.admin === "superadmin";
+  const isOwner =
+    userLid === owner ||
+    participant.admin === "superadmin";
 
-  const isAdmin = participant.admin === "admin";
+  const isAdmin =
+    participant.admin === "admin";
 
   return isOwner || isAdmin;
 }
@@ -131,7 +161,12 @@ export function isBotOwner({ userLid }) {
   return userLid === OWNER_LID;
 }
 
-export async function checkPermission({ type, socket, userLid, remoteJid }) {
+export async function checkPermission({
+  type,
+  socket,
+  userLid,
+  remoteJid,
+}) {
   if (type === "member") {
     return true;
   }
@@ -139,48 +174,41 @@ export async function checkPermission({ type, socket, userLid, remoteJid }) {
   try {
     await delay(500);
 
-    const { participants, owner } = await socket.groupMetadata(remoteJid);
+    const { participants, owner } =
+      await socket.groupMetadata(remoteJid);
 
     const participant = participants.find(
-      (participant) => participant.id === userLid
+      (participant) =>
+        participant.id === userLid ||
+        participant.lid === userLid ||
+        participant.jid === userLid
     );
+
+    const isBotOwner =
+      userLid === OWNER_LID;
 
     if (!participant) {
-      return false;
+      return isBotOwner;
     }
 
-    const isBotOwner = userLid === OWNER_LID;
+    const isOwner =
+      userLid === owner ||
+      participant.admin === "superadmin";
 
-    const isOwner = userLid === owner || participant.admin === "superadmin";
-
-    const isAdmin = isOwner || participant.admin === "admin";
-
-    const ownerStillInGroup = participants.some(
-      (participant) => participant.id === owner
-    );
-
-    const hasSuperAdmin = participants.some(
-      (participant) => participant.admin === "superadmin"
-    );
+    const isAdmin =
+      isOwner ||
+      participant.admin === "admin";
 
     if (type === "admin") {
-      return isOwner || isAdmin || isBotOwner;
+      return (
+        isBotOwner ||
+        isOwner ||
+        isAdmin
+      );
     }
 
     if (type === "owner") {
-      if (isBotOwner) {
-        return true;
-      }
-
-      if (isOwner) {
-        return true;
-      }
-
-      if (!ownerStillInGroup || !hasSuperAdmin) {
-        return isAdmin;
-      }
-
-      return false;
+      return isBotOwner;
     }
 
     return false;
