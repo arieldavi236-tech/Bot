@@ -1,3 +1,6 @@
 import comandos from "./brincadeiras.js";
 
-export default comandos.numero;
+export default {
+  commands: ["numero"],
+  ...comandos.numero,
+};

@@ -171,6 +171,12 @@ export async function checkPermission({
     return true;
   }
 
+  // Comandos de owner podem ser usados no PV.
+  // Não tente consultar groupMetadata em conversa privada.
+  if (type === "owner" && !remoteJid.endsWith("@g.us")) {
+    return userLid === OWNER_LID;
+  }
+
   try {
     await delay(500);
 

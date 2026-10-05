@@ -38,6 +38,8 @@ return `『 𝐒𝐡𝐢𝐳𝐮𝐤𝐚 𝐦𝐞𝐧𝐮 ♛ 』${readMore()}
 ┃┊˚₊· ͟͟͞͞➳${prefix}𝐦𝐞𝐧𝐮 𝐛𝐫𝐢𝐧𝐜𝐚𝐝𝐞𝐢𝐫𝐚𝐬
 ┃┊˚₊· ͟͟͞͞➳${prefix}𝐦𝐞𝐧𝐮 𝐟𝐢𝐠𝐮𝐫𝐢𝐧𝐡𝐚𝐬
 ┃┊˚₊· ͟͟͞͞➳${prefix}𝐦𝐞𝐧𝐮 𝐩𝐞𝐬𝐪𝐮𝐢𝐬𝐚𝐫
+┃┊˚₊· ͟͟͞͞➳${prefix}𝐦𝐞𝐧𝐮 𝐚𝐧𝐢𝐦𝐞
+┃┊˚₊· ͟͟͞͞➳${prefix}𝐦𝐞𝐧𝐮 𝐢𝐦𝐚𝐠𝐞𝐧𝐬
 ┃┊˚₊· ͟͟͞͞➳${prefix}𝐦𝐞𝐧𝐮 𝐢𝐚
 ┃┊˚₊· ͟͟͞͞➳${prefix}𝐦𝐞𝐧𝐮 𝐝𝐨𝐧𝐨
 ┃┊
@@ -57,6 +59,7 @@ ${item(prefix, "bratvid")}
 ${item(prefix, "cep")}
 ${item(prefix, "fake-chat")}
 ${item(prefix, "gerar-link")}
+${item(prefix, "to-link")}
 ${item(prefix, "perfil")}
 ${item(prefix, "rename")}
 ${item(prefix, "removebg")}
@@ -75,11 +78,14 @@ ${start}『 _*ADMINISTRAÇÃO*_ 』
 ${item(prefix, "abrir")}
 ${item(prefix, "fechar")}
 ${item(prefix, "ban")}
+${item(prefix, "desban")}
 ${item(prefix, "promover")}
 ${item(prefix, "rebaixar")}
 ${item(prefix, "delete")}
 ${item(prefix, "mute")}
 ${item(prefix, "unmute")}
+${item(prefix, "exit")}
+${item(prefix, "limpar")}
 ${item(prefix, "hidetag")}
 ${item(prefix, "marcartodos")}
 ${item(prefix, "marcaroculto")}
@@ -87,14 +93,20 @@ ${item(prefix, "adms")}
 ${item(prefix, "infogrupo")}
 ${item(prefix, "membros")}
 ${item(prefix, "link-grupo")}
-${item(prefix, "limpar-chat")}
-${item(prefix, "welcome 1/0")}
+${item(prefix, "idgrupo")}
+${item(prefix, "set-name")}
 ${item(prefix, "only-admin 1/0")}
+${item(prefix, "welcome 1/0")}
 ${item(prefix, "warn")}
 ${item(prefix, "unwarn")}
-${item(prefix, "listanegra")}
-${item(prefix, "tirarlistanegra")}
-${item(prefix, "verlistanegra")}
+${item(prefix, "warn-reactivate")}
+${item(prefix, "regras")}
+${item(prefix, "set-regras")}
+${item(prefix, "anotar")}
+${item(prefix, "enquete")}
+${item(prefix, "slowmode")}
+${item(prefix, "tempban")}
+${item(prefix, "contagem")}
 ${line}
 
 ${start}『 _*ANTIS*_ 』
@@ -109,20 +121,70 @@ ${item(prefix, "anti-event 1/0")}
 ${item(prefix, "anti-payment 1/0")}
 ${item(prefix, "anti-product 1/0")}
 ${item(prefix, "anti-status-grupo 1/0")}
-${item(prefix, "anti-lottie-sticker 1/0")}
+${item(prefix, "anti-lottier-sticker 1/0")}
+${item(prefix, "antidelete")}
+${line}
+
+${start}『 _*LISTA NEGRA*_ 』
+${item(prefix, "listanegra")}
+${item(prefix, "tirarlistanegra")}
+${item(prefix, "verlistanegra")}
+${line}
+
+${start}『 _*AUTOMAÇÕES*_ 』
+${item(prefix, "add-auto-responder")}
+${item(prefix, "auto-responder")}
+${item(prefix, "delete-auto-responder")}
+${item(prefix, "list-auto-responder")}
+${item(prefix, "auto-sticker")}
+${item(prefix, "agendar")}
+${item(prefix, "afk")}
+${line}
+
+${start}『 _*GRUPO / ADM*_ 』
+${item(prefix, "admininfo")}
+${item(prefix, "admcheck")}
+${item(prefix, "promoverlista")}
+${item(prefix, "despromoverlista")}
+${item(prefix, "tagadm")}
+${item(prefix, "tagmembros")}
+${item(prefix, "sorteio")}
+${item(prefix, "setprefix")}
+${item(prefix, "setwelcome")}
+${item(prefix, "resetgrupo")}
+${item(prefix, "antilink")}
+${line}
+
+${start}『 _*OUTROS*_ 』
+${item(prefix, "block-wpp")}
+${item(prefix, "saldo")}
 ${line}`;
   }
 
   if (["brincadeiras", "brincadeira", "jogos"].includes(cat)) {
     return `『 _𝐌𝐄𝐍𝐔 𝐁𝐑𝐈𝐍𝐂𝐀𝐃𝐄𝐈𝐑𝐀𝐒 ♛_ 』
 
-${start}『 _*JOGOS/INTERAÇÕES*_ 』
+${start}『 _*JOGOS*_ 』
+${item(prefix, "quiz")}
+${item(prefix, "jokenpo")}
+${item(prefix, "forca")}
+${item(prefix, "adivinhe")}
+${item(prefix, "dado")}
+${item(prefix, "numero")}
+${item(prefix, "parouimpar")}
+${item(prefix, "desafio")}
+${item(prefix, "ranking")}
+${line}
+
+${start}『 _*INTERAÇÕES*_ 』
 ${item(prefix, "abracar")}
 ${item(prefix, "beijar")}
-${item(prefix, "dado")}
+${item(prefix, "comer")}
 ${item(prefix, "jantar")}
 ${item(prefix, "lutar")}
 ${item(prefix, "matar")}
+${item(prefix, "nazista")}
+${item(prefix, "pau")}
 ${item(prefix, "socar")}
 ${item(prefix, "tapa")}
 ${line}`;
@@ -163,9 +225,94 @@ ${item(prefix, "play-audio")}
 ${item(prefix, "play-video")}
 ${item(prefix, "tik-tok")}
 ${item(prefix, "tik-tok-audio")}
-${item(prefix, "x-twitter")}
+${item(prefix, "xtwitter")}
 ${item(prefix, "yt-mp3")}
 ${item(prefix, "yt-mp4")}
+${line}`;
+  }
+
+  if (["anime", "animes"].includes(cat)) {
+    return `『 _𝐌𝐄𝐍𝐔 𝐀𝐍𝐈𝐌𝐄 ♛_ 』
+
+${start}『 _*ANIME*_ 』
+${item(prefix, "anime")}
+${item(prefix, "animebuscar")}
+${item(prefix, "buscaanime")}
+${item(prefix, "anoanime")}
+${item(prefix, "animeinfo")}
+${item(prefix, "animefoto")}
+${item(prefix, "animegif")}
+${item(prefix, "animepopular")}
+${item(prefix, "animerandom")}
+${item(prefix, "animes")}
+${item(prefix, "temporada")}
+${item(prefix, "topanime")}
+${line}
+
+${start}『 _*PERSONAGENS*_ 』
+${item(prefix, "personagem")}
+${item(prefix, "personagembuscar")}
+${item(prefix, "personageminfo")}
+${item(prefix, "personagemfoto")}
+${item(prefix, "personagemdescricao")}
+${item(prefix, "personagemaleatorio")}
+${item(prefix, "quem-e")}
+${line}
+
+${start}『 _*MANGÁ*_ 』
+${item(prefix, "manga")}
+${item(prefix, "mangabuscar")}
+${item(prefix, "mangainfo")}
+${item(prefix, "mangacapitulos")}
+${item(prefix, "manganota")}
+${item(prefix, "mangavolumes")}
+${line}
+
+${start}『 _*EXTRAS*_ 』
+${item(prefix, "fanart")}
+${item(prefix, "genero")}
+${item(prefix, "generoanime")}
+${item(prefix, "metadinha")}
+${item(prefix, "nota")}
+${item(prefix, "poder")}
+${item(prefix, "sinopse")}
+${item(prefix, "statusanime")}
+${item(prefix, "episodios")}
+${item(prefix, "lista_anime")}
+${item(prefix, "batalhaanime")}
+${item(prefix, "duelo")}
+${item(prefix, "quizanime")}
+${item(prefix, "stickeranime")}
+${item(prefix, "wallpaperanime")}
+${line}`;
+  }
+
+  if (["imagens", "imagem", "efeitos", "efeito"].includes(cat)) {
+    return `『 _𝐌𝐄𝐍𝐔 𝐈𝐌𝐀𝐆𝐄𝐍𝐒 ♛_ 』
+
+${start}『 _*EFEITOS*_ 』
+${item(prefix, "blur")}
+${item(prefix, "contraste")}
+${item(prefix, "gray")}
+${item(prefix, "invert")}
+${item(prefix, "pixel")}
+${item(prefix, "espelhar")}
+${item(prefix, "rip")}
+${item(prefix, "cadeia")}
+${line}
+
+${start}『 _*MELHORIA / EDIÇÃO*_ 』
+${item(prefix, "hd")}
+${item(prefix, "melhora")}
+${item(prefix, "bolsonaro")}
+${item(prefix, "removebg")}
+${item(prefix, "rename")}
+${line}
+
+${start}『 _*CONVERSÕES*_ 』
+${item(prefix, "to-image")}
+${item(prefix, "to-gif")}
+${item(prefix, "to-mp3")}
 ${line}`;
   }
 

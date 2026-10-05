@@ -1,3 +1,6 @@
 import comandos from "./brincadeiras.js";
 
-export default comandos.adivinhe;
+export default {
+  commands: ["adivinhe"],
+  ...comandos.adivinhe,
+};

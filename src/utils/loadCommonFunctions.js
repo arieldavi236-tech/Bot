@@ -82,19 +82,19 @@ export function loadCommonFunctions({ socket, webMessage }) {
   };
 
   const downloadAudio = async (webMessage, fileName) => {
-    return await download(webMessage, fileName, "audio", "mpeg");
+    return await download(webMessage, fileName, "audio", "mpeg", socket);
   };
 
   const downloadImage = async (webMessage, fileName) => {
-    return await download(webMessage, fileName, "image", "png");
+    return await download(webMessage, fileName, "image", "png", socket);
   };
 
   const downloadSticker = async (webMessage, fileName) => {
-    return await download(webMessage, fileName, "sticker", "webp");
+    return await download(webMessage, fileName, "sticker", "webp", socket);
   };
 
   const downloadVideo = async (webMessage, fileName) => {
-    return await download(webMessage, fileName, "video", "mp4");
+    return await download(webMessage, fileName, "video", "mp4", socket);
   };
 
   const sendText = async (text, mentions) => {

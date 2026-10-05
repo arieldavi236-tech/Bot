@@ -1,3 +1,6 @@
 import comandos from "./brincadeiras.js";
 
-export default comandos.quiz;
+export default {
+  commands: ["quiz"],
+  ...comandos.quiz,
+};

@@ -4,7 +4,7 @@
  * @author Dev Gui
  */
 import axios from "axios";
-import { delay, downloadContentFromMessage } from "baileys";
+import { delay, downloadContentFromMessage, downloadMediaMessage } from "baileys";
 import { writeFile } from "fs/promises";
 import { exec } from "node:child_process";
 import fs from "node:fs";
@@ -96,10 +96,22 @@ export function extractDataFromMessage(webMessage) {
 
   const replyText = replyTextType1 || replyTextType2 || replyTextType3 || "";
 
-  const userLid = webMessage?.key?.participant?.replace(
-    /:[0-9][0-9]|:[0-9]/g,
-    "",
-  );
+  const userLid = (
+    webMessage?.key?.participant ||
+    webMessage?.key?.remoteJid ||
+    ""
+  ).replace(/:[0-9][0-9]|:[0-9]/g, "");
+
+  if (webMessage?.key?.remoteJid && !webMessage?.key?.participant) {
+    console.log(
+      "♛ PV OWNER DEBUG:",
+      JSON.stringify({
+        remoteJid: webMessage.key.remoteJid,
+        participant: webMessage.key.participant,
+        userLid,
+      })
+    );
+  }
 
   const [command, ...args] = fullMessage.split(" ");
   const prefix = command.charAt(0);
@@ -178,17 +190,58 @@ export function baileysIs(webMessage, context) {
 }
 
 export function getContent(webMessage, context) {
+  const key = `${context}Message`;
+
+  const findContent = (message) => {
+    if (!message || typeof message !== "object") {
+      return null;
+    }
+
+    if (message[key]) {
+      return message[key];
+    }
+
+    const wrappers = [
+      "viewOnceMessage",
+      "viewOnceMessageV2",
+      "viewOnceMessageV2Extension",
+      "ephemeralMessage",
+      "documentWithCaptionMessage",
+      "editedMessage",
+    ];
+
+    for (const wrapper of wrappers) {
+      const nested = message[wrapper]?.message;
+      const result = findContent(nested);
+
+      if (result) {
+        return result;
+      }
+    }
+
+    return null;
+  };
+
+  const direct = findContent(webMessage?.message);
+
+  if (direct) {
+    return direct;
+  }
+
+  const quoted =
+    webMessage?.message?.extendedTextMessage?.contextInfo?.quotedMessage ||
+    webMessage?.message?.imageMessage?.contextInfo?.quotedMessage ||
+    webMessage?.message?.videoMessage?.contextInfo?.quotedMessage;
+
+  return findContent(quoted);
+}
+
+export function getQuotedMessage(webMessage) {
   return (
-    webMessage?.message?.[`${context}Message`] ||
-    webMessage?.message?.extendedTextMessage?.contextInfo?.quotedMessage?.[
-      `${context}Message`
-    ] ||
-    webMessage?.message?.viewOnceMessage?.message?.[`${context}Message`] ||
-    webMessage?.message?.extendedTextMessage?.contextInfo?.quotedMessage
-      ?.viewOnceMessage?.message?.[`${context}Message`] ||
-    webMessage?.message?.viewOnceMessageV2?.message?.[`${context}Message`] ||
-    webMessage?.message?.extendedTextMessage?.contextInfo?.quotedMessage
-      ?.viewOnceMessageV2?.message?.[`${context}Message`]
+    webMessage?.message?.extendedTextMessage?.contextInfo?.quotedMessage ||
+    webMessage?.message?.imageMessage?.contextInfo?.quotedMessage ||
+    webMessage?.message?.videoMessage?.contextInfo?.quotedMessage ||
+    null
   );
 }
 
@@ -210,26 +263,130 @@ export function getExtensionFromMimeType(mimeType, fallback = "bin") {
   return extensionsByMimeType[normalizedMimeType] || fallback;
 }
 
-export async function download(webMessage, fileName, context, extension) {
-  const content = getContent(webMessage, context);
+export async function download(
+  webMessage,
+  fileName,
+  context,
+  extension,
+  socket = null,
+) {
+  try {
+    let content = getContent(webMessage, context);
 
-  if (!content) {
-    return null;
+    if (!content) {
+      throw new Error(`Mídia ${context} não encontrada.`);
+    }
+
+    const hasMediaKey = (media) => {
+      if (!media?.mediaKey) return false;
+
+      if (Buffer.isBuffer(media.mediaKey)) {
+        return media.mediaKey.length > 0;
+      }
+
+      if (media.mediaKey instanceof Uint8Array) {
+        return media.mediaKey.length > 0;
+      }
+
+      return String(media.mediaKey).length > 0;
+    };
+
+    /*
+     * Se for uma resposta a uma mídia e o quotedMessage estiver
+     * incompleto, tenta recuperar a mensagem original do histórico.
+     */
+    if (!hasMediaKey(content) && socket) {
+      const contextInfo =
+        webMessage?.message?.extendedTextMessage?.contextInfo;
+
+      const stanzaId = contextInfo?.stanzaId;
+      const remoteJid = webMessage?.key?.remoteJid;
+
+      if (stanzaId && remoteJid) {
+        try {
+          const original =
+            socket.__messageStore?.get(`${remoteJid}:${stanzaId}`);
+
+          if (original?.message) {
+            console.log(
+              `[DOWNLOAD] ${context}: mensagem original encontrada no cache`,
+            );
+
+            // Usa a mensagem WAMessage completa, não apenas o
+            // imageMessage incompleto do quotedMessage.
+            const buffer = await downloadMediaMessage(
+              original,
+              "buffer",
+              {},
+              {
+                reuploadRequest: socket.updateMediaMessage,
+              },
+            );
+
+            if (buffer?.length) {
+              const filePath = path.resolve(
+                TEMP_DIR,
+                `${fileName}.${extension}`,
+              );
+
+              await writeFile(filePath, buffer);
+
+              console.log(
+                `[DOWNLOAD] ${context}: mídia recuperada com sucesso pelo cache`,
+              );
+
+              return filePath;
+            }
+          } else {
+            console.warn(
+              `[DOWNLOAD] ${context}: mensagem original não está no cache`,
+            );
+          }
+        } catch (recoverError) {
+          console.warn(
+            `[DOWNLOAD] Falha ao recuperar mídia original:`,
+            recoverError?.message || recoverError,
+          );
+        }
+      }
+    }
+
+    if (!hasMediaKey(content)) {
+      throw new Error(
+        `Cannot derive from empty media key`,
+      );
+    }
+
+    const stream = await downloadContentFromMessage(content, context);
+
+    const chunks = [];
+
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+
+    const buffer = Buffer.concat(chunks);
+
+    if (!buffer.length) {
+      throw new Error(`Arquivo ${context} vazio após o download.`);
+    }
+
+    const filePath = path.resolve(
+      TEMP_DIR,
+      `${fileName}.${extension}`,
+    );
+
+    await writeFile(filePath, buffer);
+
+    return filePath;
+  } catch (error) {
+    console.error(
+      `[DOWNLOAD] Falha ao baixar ${context}:`,
+      error?.message || error,
+    );
+
+    throw error;
   }
-
-  const stream = await downloadContentFromMessage(content, context);
-
-  let buffer = Buffer.from([]);
-
-  for await (const chunk of stream) {
-    buffer = Buffer.concat([buffer, chunk]);
-  }
-
-  const filePath = path.resolve(TEMP_DIR, `${fileName}.${extension}`);
-
-  await writeFile(filePath, buffer);
-
-  return filePath;
 }
 
 export function readDirectoryRecursive(dir) {

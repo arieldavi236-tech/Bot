@@ -1,7 +1,8 @@
 {
   "120363409513092611@g.us": {
-    "welcome": "Seja bem-vindo ao grupo, @user! 👋",
-    "slowmode": 0
+    "welcome": "Bem-vindo(a) número da pessoa\n\nA 𝑺𝒉𝒊𝒛𝒖𝒌𝒂🦇 𝒙 𝒗𝒆𝒏𝒅𝒂𝒔/𝒕𝒓𝒐𝒄𝒂𝒔\n\n👥 𝐀𝐃𝐌 𝐎𝐅𝐈𝐂𝐈𝐀L: ⬇️\n\n📲 Valentina-21975150859\n━━━━━━━━━━━━━━━\n⚠️ 𝐀𝐕𝐈𝐒𝐎𝐒 𝐈𝐌𝐏𝐎𝐑𝐓𝐀𝐍𝐓𝐄𝐒\n\n*📖 LEIA A DESCRIÇÃO DO GRUPO*\n*🚫 PERFIL COM \"ADM/@ADM\" NO NOME*\n*🚫 LINKS NO GRUPO*",
+    "slowmode": 0,
+    "welcomeImage": "/data/data/com.termux/files/home/storage/ariel-bot/assets/welcome/welcome-120363409513092611_g_us.jpg"
   },
   "120363429011184796@g.us": {
     "welcome": "off"

@@ -68,6 +68,22 @@ export async function customMiddleware({
     const text = groupSettings.welcome
       .replace(/@user/gi, `@${member?.split("@")[0] || ""}`);
 
+    const welcomeImage = groupSettings?.welcomeImage;
+
+    if (welcomeImage) {
+      const fs = await import("fs");
+
+      if (fs.existsSync(welcomeImage)) {
+        await socket.sendMessage(remoteJid, {
+          image: fs.readFileSync(welcomeImage),
+          caption: text,
+          mentions: member ? [member] : [],
+        });
+
+        return;
+      }
+    }
+
     await socket.sendMessage(remoteJid, {
       text,
       mentions: member ? [member] : [],

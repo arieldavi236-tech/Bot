@@ -1,3 +1,6 @@
 import comandos from "./brincadeiras.js";
 
-export default comandos.forca;
+export default {
+  commands: ["forca"],
+  ...comandos.forca,
+};

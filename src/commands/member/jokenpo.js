@@ -1,3 +1,6 @@
 import comandos from "./brincadeiras.js";
 
-export default comandos.jokenpo;
+export default {
+  commands: ["jokenpo"],
+  ...comandos.jokenpo,
+};

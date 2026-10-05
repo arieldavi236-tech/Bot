@@ -3,3 +3,21 @@ node_modules/
 assets/auth/baileys
 assets/temp/
 assets/temp/wa-logs.txt
+
+# Backups e arquivos temporários
+*.backup*
+*.bak
+*.bak2
+assets/temp/
+temp/
+monitor-panel/
+host/server.js.backup*
+
+# Arquivos locais que não devem ir para o GitHub
+hutaobot/
+watchdog/*.log
+*.before-*
+*.antes-*
+
+hutaobot/
+assets/temp/

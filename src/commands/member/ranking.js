@@ -1,3 +1,6 @@
 import comandos from "./brincadeiras.js";
 
-export default comandos.ranking;
+export default {
+  commands: ["ranking"],
+  ...comandos.ranking,
+};

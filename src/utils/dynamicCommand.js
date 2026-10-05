@@ -31,6 +31,7 @@ import {
 } from "./database.js";
 import { findCommandImport } from "./index.js";
 import { errorLog } from "./logger.js";
+import { isPrivateEnabled } from "./pvControl.js";
 
 /**
  * @param {CommandHandleProps} paramsHandler
@@ -50,6 +51,19 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     userLid,
     webMessage,
   } = paramsHandler;
+
+  // Controle de respostas no privado.
+  // Os comandos pvon/pvoff passam primeiro e fazem sua própria checagem de dono.
+  // Quando o PV está desligado, somente esses dois comandos podem passar.
+  if (!paramsHandler.isGroup && !isPrivateEnabled()) {
+    const isPvControlCommand = ["pvon", "pvoff"].includes(
+      String(commandName || "").toLowerCase()
+    );
+
+    if (!isPvControlCommand) {
+      return;
+    }
+  }
 
   const activeGroup = isActiveGroup(remoteJid);
 
@@ -86,7 +100,30 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     }
   }
 
-  const { type, command } = await findCommandImport(commandName);
+  console.log("♛ PV CMD DEBUG:", JSON.stringify({
+    commandName,
+    userLid,
+    remoteJid,
+    isGroup: paramsHandler.isGroup,
+    pvEnabled: isPrivateEnabled()
+  }));
+
+  let type, command;
+
+  try {
+    const result = await findCommandImport(commandName);
+    type = result.type;
+    command = result.command;
+
+    console.log("♛ PV FIND DEBUG:", JSON.stringify({
+      type,
+      command: command?.name,
+      commands: command?.commands
+    }));
+  } catch (error) {
+    console.error("♛ PV FIND ERROR:", error);
+    return;
+  }
 
   if (ONLY_GROUP_ID && ONLY_GROUP_ID !== remoteJid) {
     return;
@@ -150,6 +187,12 @@ export async function dynamicCommand(paramsHandler, startProcess) {
 
     return;
   }
+
+  console.log("♛ PV FIND DEBUG:", JSON.stringify({
+    type,
+    command: command?.name,
+    commands: command?.commands
+  }));
 
   if (!hasTypeAndCommand({ type, command })) {
     await sendWarningReply(

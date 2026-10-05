@@ -171,6 +171,185 @@ function systemMemoryPercent() {
   return ((1 - free / total) * 100).toFixed(1);
 }
 
+
+
+
+// =====================================================
+// STATUS DO MONITOR SHIZUKA
+// =====================================================
+
+app.get("/monitor-status", (req, res) => {
+  try {
+    const statusFile = path.join(
+      ROOT,
+      "monitor-panel",
+      "status.json"
+    );
+
+    if (!fs.existsSync(statusFile)) {
+      return res.json({
+        online: false,
+        name: BOT_NAME,
+        cpu: "0%",
+        memory: "0 MB",
+        systemMemory: systemMemoryPercent() + "%",
+        uptime: "00:00:00",
+        watchdog: false,
+        monitor: "OFFLINE",
+        error: "status.json não encontrado."
+      });
+    }
+
+    const monitor = JSON.parse(
+      fs.readFileSync(statusFile, "utf8")
+    );
+
+    const online = monitor.status === "ONLINE";
+
+    let uptime = "00:00:00";
+
+    if (online && monitor.uptime) {
+      const elapsed = Math.max(
+        0,
+        Date.now() - Number(monitor.uptime)
+      );
+
+      uptime = formatUptime(elapsed);
+    }
+
+    const memoryBytes = Number(monitor.memory || 0);
+
+    res.json({
+      online,
+      name: monitor.botName || BOT_NAME,
+      cpu: "Monitor",
+      memory: formatBytes(memoryBytes),
+      systemMemory: systemMemoryPercent() + "%",
+      uptime,
+      watchdog: monitor.monitor === "ONLINE",
+      monitor: monitor.monitor || "OFFLINE",
+      bot: monitor.bot || "OFFLINE",
+      pid: monitor.pid || null,
+      lastHeartbeat: monitor.lastHeartbeat || null,
+      lastChange: monitor.lastChange || null
+    });
+
+  } catch (error) {
+    res.json({
+      online: false,
+      name: BOT_NAME,
+      cpu: "0%",
+      memory: "0 MB",
+      systemMemory: systemMemoryPercent() + "%",
+      uptime: "00:00:00",
+      watchdog: false,
+      monitor: "ERROR",
+      error: error.message
+    });
+  }
+});
+
+app.post("/recover", async (req, res) => {
+  try {
+    const { execFile } = await import("child_process");
+
+    execFile(
+      "pm2",
+      ["jlist"],
+      (listError, stdout) => {
+        if (listError) {
+          console.error("[RECOVER] PM2 indisponível:", listError.message);
+
+          return res.status(500).json({
+            ok: false,
+            message: "PM2 não está disponível."
+          });
+        }
+
+        let processes;
+
+        try {
+          processes = JSON.parse(stdout);
+        } catch {
+          return res.status(500).json({
+            ok: false,
+            message: "Não foi possível consultar o PM2."
+          });
+        }
+
+        const bot = processes.find(
+          (process) => process.name === "ariel-bot"
+        );
+
+        const action =
+          bot && bot.pm2_env?.status === "online"
+            ? "restart"
+            : "start";
+
+        console.log(
+          `[RECOVER] Shizuka está ${
+            bot?.pm2_env?.status || "não encontrada"
+          }. Executando PM2 ${action}.`
+        );
+
+        execFile(
+          "pm2",
+          [action, "ariel-bot"],
+          (error, stdout2, stderr2) => {
+            if (error) {
+              console.error(
+                "[RECOVER] Falha:",
+                error.message,
+                stderr2 || ""
+              );
+
+              return res.status(500).json({
+                ok: false,
+                message: "Não foi possível iniciar a Shizuka."
+              });
+            }
+
+            console.log(
+              `[RECOVER] PM2 ${action} executado com sucesso.`
+            );
+
+            res.json({
+              ok: true,
+              action,
+              message:
+                action === "start"
+                  ? "Recuperação solicitada."
+                  : "Recuperação solicitada."
+            });
+          }
+        );
+      }
+    );
+
+  } catch (error) {
+    console.error("[RECOVER] Erro:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Erro interno ao recuperar a Shizuka."
+    });
+  }
+});
+
+app.get("/monitor", (req, res) => {
+  const file = path.join(
+    ROOT,
+    "monitor-panel",
+    "panel.html"
+  );
+
+  if (!fs.existsSync(file)) {
+    return res.status(404).send("Painel não encontrado.");
+  }
+
+  res.sendFile(file);
+});
+
 // =====================================================
 // PAINEL
 // =====================================================
@@ -450,6 +629,40 @@ button:disabled {
   border: 1px solid rgba(255,82,82,.25);
 }
 
+
+.offline-alert {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid rgba(255, 70, 70, .45);
+  border-radius: 14px;
+  background: rgba(120, 0, 0, .18);
+  text-align: center;
+}
+
+.offline-title {
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.offline-text {
+  opacity: .85;
+  margin-bottom: 14px;
+}
+
+.recover-button {
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.recover-message {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
 </style>
 
 </head>
@@ -476,6 +689,17 @@ button:disabled {
 
       <div id="status" class="status loading">
         Carregando...
+      </div>
+
+      <div id="offlineAlert" class="offline-alert" style="display:none;">
+        <div class="offline-title">🔴 SHIZUKA OFFLINE</div>
+        <div class="offline-text">
+          A Shizuka parou ou perdeu a conexão com o monitor.
+        </div>
+        <button id="recoverButton" class="recover-button" onclick="recoverShizuka()">
+          ♻️ RECUPERAR SHIZUKA
+        </button>
+        <div id="recoverMessage" class="recover-message"></div>
       </div>
 
       <div class="stat">
@@ -675,12 +899,81 @@ function showActionMessage(message) {
 
 }
 
+
+let lastOnlineState = null;
+
+
+function notifyShizukaOffline() {
+  try {
+    if (!("Notification" in window)) {
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      new Notification("🔴 Shizuka OFFLINE", {
+        body: "A Shizuka foi detectada como offline.",
+        tag: "shizuka-offline",
+        requireInteraction: true
+      });
+    }
+  } catch (error) {
+    console.warn("[NOTIFICAÇÃO]", error);
+  }
+}
+
+async function requestNotificationPermission() {
+  try {
+    if (!("Notification" in window)) {
+      return;
+    }
+
+    if (Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+  } catch (error) {
+    console.warn("[NOTIFICAÇÃO] Permissão:", error);
+  }
+}
+
+async function recoverShizuka() {
+  const button = document.getElementById("recoverButton");
+  const message = document.getElementById("recoverMessage");
+
+  button.disabled = true;
+  button.innerText = "♻️ RECUPERANDO...";
+  message.innerText = "Enviando pedido para reiniciar a Shizuka...";
+
+  try {
+    const response = await fetch("/recover", {
+      method: "POST"
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.message || "Falha na recuperação.");
+    }
+
+    message.innerText = "✅ " + (data.message || "Pedido enviado.");
+
+    setTimeout(() => {
+      requestNotificationPermission();
+loadStatus();
+    }, 3000);
+
+  } catch (error) {
+    message.innerText = "❌ " + error.message;
+    button.disabled = false;
+    button.innerText = "♻️ RECUPERAR SHIZUKA";
+  }
+}
+
 async function loadStatus() {
 
   try {
 
     const response =
-      await fetch("/status", {
+      await fetch("/monitor-status", {
         cache: "no-store"
       });
 
@@ -697,16 +990,46 @@ async function loadStatus() {
     const watchdog =
       document.getElementById("watchdog");
 
+    const offlineAlert =
+      document.getElementById("offlineAlert");
+
+    const recoverButton =
+      document.getElementById("recoverButton");
+
     if (data.online) {
 
       status.innerText = "🟢 ONLINE";
       status.className = "status online";
+
+      offlineAlert.style.display = "none";
+
+      if (lastOnlineState === false) {
+        recoverButton.disabled = false;
+        recoverButton.innerText = "♻️ RECUPERAR SHIZUKA";
+      }
+
+      lastOnlineState = true;
 
     } else {
 
       status.innerText = "🔴 OFFLINE";
       status.className = "status offline";
 
+      offlineAlert.style.display = "block";
+
+      if (lastOnlineState !== false) {
+        const message =
+          document.getElementById("recoverMessage");
+
+        if (message) {
+          message.innerText =
+            "⚠️ A Shizuka foi detectada como offline.";
+        }
+
+        notifyShizukaOffline();
+      }
+
+      lastOnlineState = false;
     }
 
     document.getElementById("process").innerText =

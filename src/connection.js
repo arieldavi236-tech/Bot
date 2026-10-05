@@ -97,6 +97,30 @@ export async function connect() {
     shouldSyncHistoryMessage: () => false,
   });
 
+  // Cache local das mensagens para recuperar mídias respondidas/quotadas.
+  // Necessário quando o quotedMessage chega sem mediaKey.
+  const messageStore = new Map();
+
+  socket.ev.on("messages.upsert", ({ messages }) => {
+    for (const message of messages || []) {
+      const remoteJid = message?.key?.remoteJid;
+      const id = message?.key?.id;
+
+      if (!remoteJid || !id) continue;
+
+      messageStore.set(`${remoteJid}:${id}`, message);
+    }
+
+    // Evita crescimento infinito da memória.
+    while (messageStore.size > 3000) {
+      const firstKey = messageStore.keys().next().value;
+      if (firstKey) messageStore.delete(firstKey);
+      else break;
+    }
+  });
+
+  socket.__messageStore = messageStore;
+
   if (!socket.authState.creds.registered) {
     clearScreenWithBanner();
     console.log(

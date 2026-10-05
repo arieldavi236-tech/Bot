@@ -40,21 +40,42 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
     }
 
     try {
-      if (!webMessage?.key?.remoteJid?.endsWith("@g.us")) {
-        continue;
-      }
+      const remoteJid = webMessage?.key?.remoteJid || "";
+      const isGroup = remoteJid.endsWith("@g.us");
 
       const timestamp = webMessage.messageTimestamp;
 
-      // Registra o envelope (id -> autor/estado) de TODA mensagem de grupo,
-      // para corroborar marcações de pagamento e impedir forja (banir inocente).
-      recordMessageEnvelope(webMessage, hasPaymentMessage(webMessage));
+      // Registra envelope somente para mensagens de grupo.
+      // PV não precisa desse registro.
+      if (isGroup) {
+        recordMessageEnvelope(webMessage, hasPaymentMessage(webMessage));
+      }
 
       if (webMessage?.message) {
         messageHandler(socket, webMessage);
       }
 
       if (isAtLeastMinutesInPast(timestamp)) {
+        continue;
+      }
+
+      if (!isGroup) {
+        const commonFunctions = loadCommonFunctions({ socket, webMessage });
+
+        if (!commonFunctions) {
+          continue;
+        }
+
+        await customMiddleware({
+          socket,
+          webMessage,
+          type: "message",
+          commonFunctions,
+        });
+
+        await handleAfkReferences({ webMessage, commonFunctions });
+
+        await dynamicCommand(commonFunctions, startProcess);
         continue;
       }
 
