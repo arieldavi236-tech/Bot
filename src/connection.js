@@ -127,7 +127,7 @@ export async function connect() {
       'Informe o número do bot (SP/RJ exigem 9º dígito). \nExemplo: "+5511912345678", demais estados: "+554112345678":',
     );
 
-    const phoneNumber = await question("Número: ");
+    const phoneNumber = process.env.PHONE_NUMBER || await question("Número: ");
 
     if (!phoneNumber) {
       errorLog(
