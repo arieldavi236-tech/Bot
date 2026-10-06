@@ -21,3 +21,8 @@ watchdog/*.log
 
 hutaobot/
 assets/temp/
+node_modules/
+assets/auth/
+assets/temp/
+.env
+*.log

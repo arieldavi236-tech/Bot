@@ -62,7 +62,7 @@ export default {
           name: "cta_url",
           buttonParamsJson: JSON.stringify({
             display_text: "Abrir site",
-            url: "https://github.com/guiireal",
+            url: "https://github.com/arieldavi236-tech",
           }),
         },
         {
@@ -76,7 +76,7 @@ export default {
           name: "cta_copy",
           buttonParamsJson: JSON.stringify({
             display_text: "Copiar código",
-            copy_code: "TAKESHI2026",
+            copy_code: "SHIZUKA2026",
           }),
         },
       ],
@@ -114,7 +114,7 @@ await socket.sendMessage(remoteJid, {
       name: 'cta_url',
       buttonParamsJson: JSON.stringify({
         display_text: 'Abrir site',
-        url: 'https://github.com/guiireal'
+        url: 'https://github.com/arieldavi236-tech'
       })
     }
   ],
@@ -127,6 +127,6 @@ await socket.sendMessage(remoteJid, {
 • \`useLegacyButtons: true\` força o formato antigo \`buttonsMessage\`
 • \`interactiveButtons\` aceita \`quick_reply\`, \`cta_url\`, \`cta_call\`, \`cta_copy\`, \`single_select\`, entre outros
 • \`templateButtons\` não é mais renderizado pelo WhatsApp em números comuns, use \`interactiveButtons\`
-⚠️ Importante: a baileys do Takeshi foi modificada para suportar esses formatos!`);
+⚠️ Importante: a baileys do Shizuka foi modificada para suportar esses formatos!`);
   },
 };
