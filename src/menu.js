@@ -29,8 +29,8 @@ return `『 𝐒𝐡𝐢𝐳𝐮𝐤𝐚 𝐦𝐞𝐧𝐮 ♛ 』${readMore()}
 ┃┊ 💎VERSÃO: ${pkg.version}
 ┃┊ ⚜️DONO OFC: @${OWNER_LID.split("@")[0]}
 ┃┊
-┗❈•≫───≪•◦🇮🇲◦•≫───≪•❈
-⏤͟͟͞͞  ⃟ ⃟𝐒𝐡𝐢𝐳𝐮𝐤𝐚 ♛
+┗❈•≫───≪•◦ 🍀 ◦•≫───≪•❈
+⏤͟͟͞͞  ⃟ ⃟🍃 𝐒𝐡𝐢𝐳𝐮𝐤𝐚 ♛ 🍃
 ┌┼┈┈┈『 _ 𝐄𝐒𝐂𝐎𝐋𝐇𝐀 𝐔𝐌 𝐌𝐄𝐍𝐔 妥』
 ┃┊
 ┃┊˚₊· ͟͟͞͞➳${prefix}𝐦𝐞𝐧𝐮 𝐝𝐢𝐯𝐞𝐫𝐬𝐨𝐬
@@ -187,6 +187,13 @@ ${item(prefix, "nazista")}
 ${item(prefix, "pau")}
 ${item(prefix, "socar")}
 ${item(prefix, "tapa")}
+${item(prefix, "gostosa")}
+${item(prefix, "gay")}
+${item(prefix, "feio")}
+${item(prefix, "corno")}
+${item(prefix, "sigma")}
+${item(prefix, "alpha")}
+${item(prefix, "beta")}
 ${line}`;
   }
 
